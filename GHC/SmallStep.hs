@@ -28,6 +28,7 @@ execution.
 -}
 module GHC.SmallStep
     ( Conf, Heap, Stack, StackElem(..)
+    , initConf
     , step
     )
     where
@@ -62,6 +63,11 @@ data StackElem
     | Alts CoreBndr [CoreAlt] -- a pending case analysis
     | Update Id               -- a pending thunk update
 
+instance Outputable StackElem where
+    ppr (ApplyTo e) = char '$' <+> ppr e
+    ppr (Alts b alts) = text "as" <+> ppr b <+> text "todo"
+    ppr (Update v) = char '#' <+> ppr v
+
 in_scope :: Heap -> InScopeSet
 in_scope = mkInScopeSet . mapVarEnv fst
 
@@ -70,6 +76,10 @@ addToHeap v e heap = extendVarEnv heap v (v,e)
 
 addManyToHeap :: [Id] -> [CoreExpr] -> Heap -> Heap
 addManyToHeap vs es = foldr (.) id (zipWith addToHeap vs es)
+
+-- | Initial configuration (empty heap and stack)
+initConf :: CoreExpr -> Conf
+initConf e = (emptyVarEnv, e, [])
 
 -- | The small-step semantics
 --
@@ -88,6 +98,9 @@ step (heap, Tick _ e, s)              = step (heap, e, s)
 step (heap, App e a, s) | isTypeArg a = step (heap, e, s)
 step (heap, Cast e _, s)              = step (heap, e, s)
 
+-- The value cases
+step (heap, e, s) | exprIsHNF e       = valStep (heap, e, s)
+
 -- Variable (evaluated)
 step (heap, Var v, s) | Just (_, e) <- lookupVarEnv heap v, exprIsHNF e
     = Just (heap, e, s)
@@ -96,27 +109,9 @@ step (heap, Var v, s) | Just (_, e) <- lookupVarEnv heap v, exprIsHNF e
 step (heap, Var v, s) | Just (_, e) <- lookupVarEnv heap v
     = Just (heap, e, Update v : s)
 
-step (heap, e, Update v : s) | exprIsHNF e
-    = Just (addToHeap v e heap, e, s)
-
 -- Function application
 step (heap, App e a, s)
     = Just (heap, e, ApplyTo a : s)
-
--- Because terms are not in A-Normal form, we have to ensure sharing here.l
--- So let us have two rules, one for trivial arguments and one for non-trivial ones.
-step (heap, Lam v e, ApplyTo a : s) | exprIsTrivial a
-    = Just (heap, substExpr empty subst e, s)
-  where
-    subst = extendSubst (mkEmptySubst (in_scope heap)) v a
-
-step (heap, Lam v e, ApplyTo a : s)
-    = Just (addToHeap fresh a heap, substExpr empty subst e, s)
-  where
-    subst = extendSubstWithVar (mkEmptySubst (in_scope heap)) v fresh
-
-    fresh_tmpl = mkSysLocal (fsLit "arg") (mkBuiltinUnique 1) (exprType a)
-    fresh = uniqAway (in_scope heap) fresh_tmpl
 
 -- Let expression (non-recursive)
 step (heap, Let (NonRec v rhs) e, s)
@@ -141,8 +136,32 @@ step (heap, Let (Rec pairs) e, s)
 -- Case expressions
 step (heap, Case e b _ alts, s)
     = Just (heap, e, Alts b alts : s)
+step _ = Nothing
 
-step (heap, val, Alts b [(DEFAULT, [], rhs)] : s) | exprIsHNF val
+valStep (heap, e, Update v : s)
+    = Just (addToHeap v e heap, e, s)
+
+-- Because terms are not in A-Normal form, we have to ensure sharing here.l
+-- So let us have two rules, one for trivial arguments and one for non-trivial ones.
+valStep (heap, Lam v e, ApplyTo a : s) | exprIsTrivial a
+    = Just (heap, substExpr empty subst e, s)
+  where
+    subst = extendSubst (mkEmptySubst (in_scope heap)) v a
+
+valStep (heap, Lam v e, ApplyTo a : s)
+    = Just (addToHeap fresh a heap, substExpr empty subst e, s)
+  where
+    subst = extendSubstWithVar (mkEmptySubst (in_scope heap)) v fresh
+
+    fresh_tmpl = mkSysLocal (fsLit "arg") (mkBuiltinUnique 1) (exprType a)
+    fresh = uniqAway (in_scope heap) fresh_tmpl
+
+-- We are applying something that is a value, but not a lambda? Then it must be
+-- a partially applied data constructor.
+valStep (heap, e, ApplyTo a : s)
+    = Just (heap, App e a, s)
+
+valStep (heap, val, Alts b [(DEFAULT, [], rhs)] : s) | exprIsHNF val
     = let rhs' = substExpr empty subst1 rhs
           heap' = addToHeap b val heap
       in  Just (heap', rhs', s)
@@ -150,7 +169,7 @@ step (heap, val, Alts b [(DEFAULT, [], rhs)] : s) | exprIsHNF val
     subst0 = mkEmptySubst (in_scope heap)
     (subst1, b') = substBndr subst0 b
 
-step (heap, Lit l, Alts b alts : s)
+valStep (heap, Lit l, Alts b alts : s)
     | Just (_, [], rhs) <- findAlt (LitAlt l) alts
     = let rhs' = substExpr empty subst1 rhs
           heap' = addToHeap b (Lit l) heap
@@ -159,7 +178,7 @@ step (heap, Lit l, Alts b alts : s)
     subst0 = mkEmptySubst (in_scope heap)
     (subst1, b') = substBndr subst0 b
 
-step (heap, val, Alts b alts : s)
+valStep (heap, val, Alts b alts : s)
     | Just (dc, args) <- isDataConApp val
     , Just (_, pats, rhs) <- findAlt (DataAlt dc) alts
     = let val_pats = filter isId pats
@@ -170,6 +189,8 @@ step (heap, val, Alts b alts : s)
   where
     subst0 = mkEmptySubst (in_scope heap)
     (subst1, b') = substBndr subst0 b
+
+valStep _ = Nothing
 
 -- Makes sure the DataCon is fully applied, and return only the value arguments
 isDataConApp :: CoreExpr -> Maybe (DataCon, [CoreArg])
