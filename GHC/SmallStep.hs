@@ -27,7 +27,12 @@ execution.
 
 -}
 module GHC.SmallStep
-    ( Conf, Heap, Stack, StackElem(..)
+    ( -- * Trivial expressions and Values
+      TrivialArg, exprIsTrivial'
+    , Value(..), isValue, isValue_maybe
+      -- * Configurations
+    , Conf, Heap, Stack, StackElem(..)
+      -- * The small-steps semantics
     , initConf
     , Step(..)
     , step
@@ -86,6 +91,7 @@ initConf :: CoreExpr -> Conf
 initConf e = (emptyVarEnv, e, [])
 
 
+-- | A trivial argument
 type TrivialArg = CoreArg
 
 -- | A Value
@@ -104,6 +110,8 @@ valueToExpr (LitVal l)           = Lit l
 valueToExpr (LamVal v e)         = Lam v e
 valueToExpr (CoercionVal co)     = Coercion co
 
+-- | An expression is trivial if it can be passed to a function: Variables,
+-- literals and coercions.
 exprIsTrivial' :: CoreExpr -> Bool
 exprIsTrivial' (Tick _ e)               = exprIsTrivial' e
 exprIsTrivial' (App e a) | isTypeArg a  = exprIsTrivial' e
@@ -115,9 +123,17 @@ exprIsTrivial' (Lit _)      = True
 exprIsTrivial' (Coercion _) = True
 exprIsTrivial' _ = False
 
+-- | An expression is a value if it is a data constructor fully applied to
+-- trivial arguments, or a literal, or a value lambda, or a coercion.
+--
+-- Why only to trivial arguments? Because non-trivial arguments need to be
+-- bound on the heap before they can be “stored” in the data constructor, so
+-- there is work to be done. Without this provision, sharing would not work as
+-- expected.
 isValue :: CoreExpr -> Bool
 isValue e = isJust (isValue_maybe e)
 
+-- | See 'isValue'
 isValue_maybe :: CoreExpr -> Maybe Value
 isValue_maybe (Tick _ e)               = isValue_maybe e
 isValue_maybe (App e a) | isTypeArg a  = isValue_maybe e
