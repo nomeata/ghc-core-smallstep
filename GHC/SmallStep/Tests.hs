@@ -30,14 +30,20 @@ factExpr n =
         Case (Var x) b natTy [(DataAlt dcZero, [],  Var dcSuccWrk `App` Var dcZeroWrk)
                              ,(DataAlt dcSucc, [z], Var times `App` Var b `App` (Var fact `App` Var z))]
     ) $
-    (Var fact `App` ((iterate (Var dcSuccWrk `App`) (Var dcZeroWrk)) !! n))
+    mkRFun deepseq [x,y] (
+        Case (Var x) b natTy [(DataAlt dcZero, [],  Var y)
+                             ,(DataAlt dcSucc, [z], Var deepseq `App` Var z `App` Var y)]
+    ) $
+    mkLet x (Var fact `App` ((iterate (Var dcSuccWrk `App`) (Var dcZeroWrk)) !! n)) $
+    Var deepseq `App` Var x `App` Var x
 
 
 -- Build IDs. use mkTemplateLocal, more predictable than proper uniques
-plus, times, fact, x, y, z, b:: Id
-[plus, times, fact, x, y, z, b] = mkTestIds
-    (words "plus times fact x y z, b")
+plus, times, deepseq, fact, x, y, z, b:: Id
+[plus, times, deepseq, fact, x, y, z, b] = mkTestIds
+    (words "plus times deepseq fact x y z b")
     [ mkFunTys [natTy, natTy] natTy
+    , mkFunTys [natTy, natTy] natTy
     , mkFunTys [natTy, natTy] natTy
     , mkFunTys [natTy] natTy
     , natTy

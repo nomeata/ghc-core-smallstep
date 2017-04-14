@@ -16,7 +16,7 @@ pp = showSDocUnsafe . ppr
 main = do
     [libdir] <- getArgs
     runGhc (Just libdir) $ do
-        getSessionDynFlags >>= setSessionDynFlags . flip gopt_set Opt_SuppressUniques
+        -- getSessionDynFlags >>= setSessionDynFlags . flip gopt_set Opt_SuppressUniques
         liftIO $ do
             let e = factExpr 3
             putStrLn $ "Input expression"
@@ -25,8 +25,9 @@ main = do
 
 
 go c = case step c of
-    Nothing -> putStrLn $ "Done"
-    Just c' -> do
+    Error e -> putStrLn $ "Error: " ++ e
+    Done -> putStrLn $ "Done"
+    Step c' -> do
         putStrLn "Next:"
         putStrLn $ pp $ c'
         go c'
