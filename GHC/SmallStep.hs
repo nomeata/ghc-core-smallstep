@@ -45,6 +45,7 @@ import CoreSubst
 import CoreUtils hiding (exprIsTrivial, exprIsHNF)
 import Id
 import VarEnv
+import VarSet
 import Unique
 import Outputable
 import DataCon
@@ -60,8 +61,7 @@ import Data.Maybe
 type Conf = (Heap, CoreExpr, Stack)
 
 -- | The heap of a 'Conf'.
-type Heap = VarEnv (Var, CoreExpr)
--- We need the Var to build an InScopeSet
+type Heap = [(Var, CoreExpr)]
 
 -- | The stack of a 'Conf'
 type Stack = [StackElem]
@@ -78,17 +78,20 @@ instance Outputable StackElem where
     ppr (Update v) = char '#' <+> ppr v
 
 in_scope :: Heap -> InScopeSet
-in_scope = mkInScopeSet . mapVarEnv fst
+in_scope = mkInScopeSet . mkVarSet . map fst
 
 addToHeap :: Id -> CoreExpr -> Heap -> Heap
-addToHeap v e heap = extendVarEnv heap v (v,e)
+addToHeap v e heap = (v,e) : filter ((/= v) . fst) heap
 
 addManyToHeap :: [Id] -> [CoreExpr] -> Heap -> Heap
 addManyToHeap vs es = foldr (.) id (zipWith addToHeap vs es)
 
+lookupHeap :: Id -> Heap -> Maybe CoreExpr
+lookupHeap = lookup
+
 -- | Initial configuration (empty heap and stack)
 initConf :: CoreExpr -> Conf
-initConf e = (emptyVarEnv, e, [])
+initConf e = ([], e, [])
 
 
 -- | A trivial argument
@@ -182,11 +185,11 @@ step (heap, Var v, s)
     = Step (heap, etaExpandDCWorker dc, s)
 
 -- Variable (evaluated)
-step (heap, Var v, s) | Just (_, e) <- lookupVarEnv heap v, isValue e
+step (heap, Var v, s) | Just e <- lookupHeap v heap, isValue e
     = Step (heap, e, s)
 
 -- Variable (unevaluated)
-step (heap, Var v, s) | Just (_, e) <- lookupVarEnv heap v
+step (heap, Var v, s) | Just e <- lookupHeap v heap
     = Step (heap, e, Update v : s)
 
 -- Variable (unbound)
