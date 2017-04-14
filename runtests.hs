@@ -13,6 +13,15 @@ eval step x = case step x of Nothing -> x
 pp :: Outputable a => a -> String
 pp = showSDocUnsafe . ppr
 
+ppConf :: Conf -> SDoc
+ppConf (heap, e, stack) =
+    nest 2 (text "Heap:") $$
+    nest 4 (vcat [hang (ppr v <> colon) 2 (ppr e) | (v,e) <- reverse heap ]) $$
+    nest 2 (text "Expression:") $$
+    nest 4 (ppr e) $$
+    nest 2 (text "Stack:") $$
+    nest 4 (vcat [ppr s | s <- stack])
+
 main = do
     [libdir] <- getArgs
     runGhc (Just libdir) $ do
@@ -29,5 +38,5 @@ go c = case step c of
     Done -> putStrLn $ "Done"
     Step c' -> do
         putStrLn "Next:"
-        putStrLn $ pp $ c'
+        putStrLn $ showSDocUnsafe $ ppConf c'
         go c'
