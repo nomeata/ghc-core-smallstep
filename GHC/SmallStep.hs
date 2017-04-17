@@ -207,7 +207,7 @@ step (heap, Let (NonRec v rhs) e, s)
     (subst1, v') = substBndr subst0 v
     e' = substExpr empty subst1 e
 
--- Let expression (non-recursive)
+-- Let expression (recursive)
 step (heap, Let (Rec pairs) e, s)
     = Step (addManyToHeap vars' rhss' heap, e', s)
   where
@@ -226,13 +226,22 @@ step (heap, Case e b _ alts, s)
 step (heap, Type _, s) = Error "type expression in control position"
 step _ = Error "Should be unreachable"
 
+
+-- The value cases.
+
 valStep :: (Heap, Value, Stack) -> Step Conf
+
+-- Stack empty? We are done
 valStep (heap, val, []) = Done
+
+-- Update a thunk
 
 valStep (heap, val, Update v : s)
     = Step (addToHeap v (valueToExpr val) heap, valueToExpr val, s)
 
--- Because terms are not in A-Normal form, we have to ensure sharing here.l
+-- beta-reduction
+
+-- Because terms are not in A-Normal form, we have to ensure sharing here.
 -- So let us have two rules, one for trivial arguments and one for non-trivial ones.
 valStep (heap, LamVal v e, ApplyTo a : s) | exprIsTrivial' a
     = Step (heap, substExpr empty subst e, s)
@@ -249,6 +258,8 @@ valStep (heap, LamVal v e, ApplyTo a : s)
 
 valStep (heap, val, ApplyTo a : s)
     = Error "non-function applied to argument"
+
+-- Case analysis
 
 valStep (heap, val, Alts b [] : s)
     = Error "empty case"
