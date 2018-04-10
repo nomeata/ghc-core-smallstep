@@ -1,4 +1,4 @@
-module GHC.SmallStep.Tests (factExpr) where
+module Fact (factExpr) where
 
 import CoreSyn hiding (mkLet)
 import CoreUtils

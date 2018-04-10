@@ -1,11 +1,13 @@
+import Prelude hiding ((<>))
 import GHC.SmallStep
-import GHC.SmallStep.Tests
 import Outputable
-import StaticFlags
 import GHC
+import GHC.Paths
 import System.Environment
 import Control.Monad.IO.Class
 import DynFlags
+
+import Fact
 
 eval step x = case step x of Nothing -> x
                              Just y -> eval step y
@@ -23,7 +25,6 @@ ppConf (heap, e, stack) =
     nest 4 (vcat [ppr s | s <- stack])
 
 main = do
-    [libdir] <- getArgs
     runGhc (Just libdir) $ do
         -- getSessionDynFlags >>= setSessionDynFlags . flip gopt_set Opt_SuppressUniques
         liftIO $ do
