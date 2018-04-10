@@ -1,5 +1,5 @@
 name:                ghc-core-smallstep
-version:             0.1
+version:             0.1.0.1
 synopsis:            A small-step semantics for Core
 description:         This module contains an executable, type ignoring
                      small-step semantics for Haskell Core with lazyness.
