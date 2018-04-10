@@ -1,6 +1,6 @@
 module GHC.SmallStep.Tests (factExpr) where
 
-import CoreSyn
+import CoreSyn hiding (mkLet)
 import CoreUtils
 import MkId
 import BasicTypes
@@ -59,7 +59,7 @@ dcZero = mkDataCon
     dcZeroName
     False
     dcZeroName
-    [] [] [] [] [] [] [] [] []
+    [] [] [] [] [] [] [] []
     natTy
     NoRRI
     natTyCon
@@ -81,7 +81,7 @@ dcSucc = mkDataCon
     dcSuccName
     False
     dcSuccName
-    [] [] [] [] [] [] [] [] [natTy]
+    [] [] [] [] [] [] [] [natTy]
     natTy
     NoRRI
     natTyCon
@@ -110,12 +110,10 @@ natTyCon = mkAlgTyCon
     []
     liftedTypeKind
     []
-    []
     Nothing
     []
     (DataTyCon [dcZero, dcSucc] False)
     (VanillaAlgTyCon natTcName)
-    Recursive
     False
 
 -- Utilities
