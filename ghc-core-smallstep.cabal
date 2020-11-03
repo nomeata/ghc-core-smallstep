@@ -8,6 +8,7 @@ license-file:        LICENSE
 author:              Joachim Breitner
 maintainer:          mail@joachim-breitner.de
 copyright:           2017 Joachim Breitner
+homepage:            https://github.com/nomeata/ghc-core-smallstep
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
